@@ -12,17 +12,21 @@
   }
   #grid {
     display: grid;
-    grid-template-columns: repeat(10, 60px);
+    grid-template-columns: repeat(10, 1fr);
     gap: 8px;
     margin-bottom: 20px;
   }
   .color-box {
-    width: 60px;
-    height: 60px;
+    width: 100%;
+    aspect-ratio: 1 / 1;
     border-radius: 8px;
     cursor: pointer;
     position: relative;
     box-shadow: 0 0 3px #000;
+    display: flex;
+    flex-direction: column;
+    justify-content: flex-end;
+    align-items: center;
   }
   .color-box.marked {
     outline: 3px solid #0f0;
@@ -46,6 +50,19 @@
   .color-box:hover .tooltip {
     opacity: 1;
   }
+  .recipe {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    margin-top: 2px;
+  }
+  .dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    margin: 1px;
+    border: 1px solid #000c;
+  }
   button {
     padding: 8px 15px;
     margin-right: 8px;
@@ -66,13 +83,17 @@
 
 <h1>Cores da Armadura de Couro (Minecraft)</h1>
 <div id="pageInfo"></div>
+<div style="margin-bottom: 10px;">
+  <button id="prevBtn">Página Anterior</button>
+  <button id="nextBtn">Próxima Página</button>
+  <button id="toggleVisual">🔁 Alternar Visual da Receita</button>
+</div>
 <div id="grid"></div>
-<button id="prevBtn">Página Anterior</button>
-<button id="nextBtn">Próxima Página</button>
 
 <script>
 const totalColors = 5764801;
 const colorsPerPage = 100;
+let visualMode = false;
 const dyeNames = [
   "Branco", "Laranja", "Magenta", "Azul Claro", "Amarelo",
   "Verde Limão", "Rosa", "Cinza", "Cinza Claro", "Ciano",
@@ -166,6 +187,21 @@ function renderPage(page) {
     const receita = qtds.map((q, idx) => q > 0 ? `${q}x ${dyeNames[idx]}` : '').filter(Boolean).join(', ');
     tooltip.textContent = receita || 'Sem corante';
     box.appendChild(tooltip);
+
+    if (visualMode) {
+      const visual = document.createElement('div');
+      visual.className = 'recipe';
+      qtds.forEach((q, idx) => {
+        for (let j = 0; j < q; j++) {
+          const dot = document.createElement('div');
+          dot.className = 'dot';
+          dot.style.backgroundColor = rgbToHex(dyeColors[idx]);
+          visual.appendChild(dot);
+        }
+      });
+      box.appendChild(visual);
+    }
+
     grid.appendChild(box);
   }
 }
@@ -181,6 +217,10 @@ document.getElementById('nextBtn').onclick = () => {
     currentPage++;
     renderPage(currentPage);
   }
+};
+document.getElementById('toggleVisual').onclick = () => {
+  visualMode = !visualMode;
+  renderPage(currentPage);
 };
 renderPage(currentPage);
 </script>
