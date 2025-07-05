@@ -1,151 +1,308 @@
 <!DOCTYPE html>
 <html lang="pt-BR">
 <head>
-  <meta charset="UTF-8">
-  <title>Combinações de Armaduras - Progresso</title>
-  <style>
-    body { font-family: sans-serif; background: #f0f0f0; padding: 20px; }
-    .top-bar { margin-bottom: 20px; display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
-    input[type="text"] { padding: 10px; flex-grow: 1; font-size: 16px; }
-    button { padding: 10px; font-size: 14px; cursor: pointer; }
-    select { padding: 10px; font-size: 14px; }
-
-    .color-box {
-      display: flex;
-      align-items: center;
-      background: white;
-      padding: 10px;
-      margin: 6px 0;
-      border-radius: 10px;
-      box-shadow: 0 2px 6px rgba(0,0,0,0.05);
-      transition: all 0.3s;
-    }
-    .color-box.checked {
-      opacity: 0.5;
-      text-decoration: line-through;
-    }
-    .swatch {
-      width: 60px;
-      height: 60px;
-      border-radius: 8px;
-      margin-right: 15px;
-      border: 3px solid #555;
-    }
-    .info { flex-grow: 1; }
-    .hex { font-size: 13px; color: #444; }
-    .dyes { font-weight: bold; font-size: 16px; }
-  </style>
+<meta charset="UTF-8" />
+<title>Cores da Armadura de Couro Minecraft</title>
+<style>
+  body {
+    font-family: Arial, sans-serif;
+    margin: 20px;
+    background: #121212;
+    color: white;
+  }
+  #grid {
+    display: grid;
+    grid-template-columns: repeat(10, 60px);
+    gap: 8px;
+    margin-bottom: 20px;
+  }
+  .color-box {
+    width: 60px;
+    height: 60px;
+    border-radius: 8px;
+    cursor: pointer;
+    position: relative;
+    box-shadow: 0 0 3px #000;
+  }
+  .color-box.marked {
+    outline: 3px solid #0f0;
+  }
+  .tooltip {
+    position: absolute;
+    bottom: -20px;
+    left: 0;
+    font-size: 10px;
+    color: #ccc;
+    width: 100%;
+    text-align: center;
+    user-select: none;
+  }
+  button {
+    padding: 8px 15px;
+    margin-right: 8px;
+    font-size: 16px;
+    border: none;
+    border-radius: 5px;
+    cursor: pointer;
+  }
+  button:hover {
+    background: #333;
+  }
+  #pageInfo {
+    margin-bottom: 15px;
+  }
+</style>
 </head>
 <body>
-  <h1>Combinações de Armaduras (com Progresso)</h1>
-  <div class="top-bar">
-    <input type="text" id="search" onkeyup="filterColors()" placeholder="Buscar corante ou cor...">
-    <select id="progressFilter" onchange="filterColors()">
-      <option value="all">Todas</option>
-      <option value="done">Já consegui</option>
-      <option value="not_done">Não consegui</option>
-    </select>
-    <button onclick="exportProgress()">🔽 Exportar Progresso</button>
-    <label>
-      <input type="file" id="importFile" style="display:none;" onchange="importProgress(event)">
-      <button onclick="document.getElementById('importFile').click()">🔼 Importar Progresso</button>
-    </label>
-  </div>
 
-  <div id="container"></div>
+<h1>Cores da Armadura de Couro (Minecraft)</h1>
+<div id="pageInfo"></div>
+<div id="grid"></div>
+<button id="prevBtn">Página Anterior</button>
+<button id="nextBtn">Próxima Página</button>
 
-  <script>
-    let data = [], index = 0, step = 100;
-    let checked = [];
+<script>
+// Constantes
+const totalColors = 5764801; // 5.764.801 cores possíveis
+const colorsPerPage = 100;
+const maxCorantes = 16;
+const maxTingimentos = 8;
 
-    async function loadData() {
-      const response = await fetch("armaduras_combinacoes.json");
-      data = await response.json();
-      loadProgress();
-      renderNext();
+// Os 16 corantes e seus RGB aproximados usados no Minecraft para tintura de couro
+// Baseado no array original do Minecraft (valores RGB entre 0 e 1)
+const dyeColors = [
+  [1.0, 1.0, 1.0],       // Branco (Bone Meal)
+  [0.95, 0.7, 0.2],      // Laranja
+  [0.9, 0.5, 0.85],      // Magenta
+  [0.6, 0.7, 0.95],      // Azul Claro
+  [0.9, 0.9, 0.2],       // Amarelo
+  [0.5, 0.8, 0.1],       // Verde Limão
+  [0.95, 0.5, 0.65],     // Rosa
+  [0.3, 0.3, 0.3],       // Cinza
+  [0.6, 0.6, 0.6],       // Cinza Claro
+  [0.3, 0.5, 0.6],       // Ciano
+  [0.7, 0.4, 0.9],       // Roxo
+  [0.2, 0.3, 0.7],       // Azul
+  [0.4, 0.25, 0.15],     // Marrom
+  [0.6, 0.2, 0.2],       // Vermelho
+  [0.1, 0.1, 0.1],       // Preto
+  [0.5, 0.5, 0.5]        // Cinza Médio
+];
+
+// Função que converte índice (0 a 5.764.800) para vetor de quantidades dos 16 corantes
+// Essa parte é complexa, pois o número total corresponde a todas as combinações com repetição de até 8 corantes entre 16 tipos.
+// Como o número 5.764.801 = combinações com repetição (C(n+r-1, r) com n=16, r=8) = C(16+8-1, 8) = C(23,8)
+// Vamos decompor o índice em uma combinação com repetição usando um método combinatório inverso.
+
+// Para simplificar, vou usar uma função que gera todas as combinações com repetição em ordem lexicográfica via composição:
+
+// A ideia: uma combinação com repetição de 8 elementos em 16 "baldes" pode ser representada por 8 bolas em 15 divisórias,
+// o número de maneiras = C(16+8-1,8) = C(23,8) = 5.764.801
+
+// Implementar a conversão índice → combinação:
+// Referência: https://stackoverflow.com/questions/23014229/generate-nth-combination-with-repetition
+
+function indexToCombination(n, k, index) {
+  // n = número de tipos (16)
+  // k = número total de itens (8)
+  // index de 0 a C(n+k-1,k)-1
+
+  let comb = [];
+  let x = index;
+  let remaining = k;
+  let start = 0;
+
+  for (let i = 0; i < n; i++) {
+    if (remaining == 0) {
+      comb.push(0);
+      continue;
+    }
+    let c = combination(n - i + remaining - 2, remaining - 1);
+    if (x < c) {
+      comb.push(1);
+      remaining--;
+    } else {
+      comb.push(0);
+      x -= c;
+    }
+  }
+  return comb;
+}
+
+// Mas o acima não gera quantidades, só a presença (1 ou 0) em cada corante, e precisamos da quantidade (0 a 8) totalizando 8.
+
+// Alternativa: geração por composição usando posições dos divisores:
+
+// A combinação com repetição pode ser vista como um vetor de 16 números (qtds) que somam 8.
+// O número de combinações é C(23,8).
+
+// Para converter índice para vetor:
+
+function indexToQuantities(index, n=16, k=8) {
+  // n = 16 cores
+  // k = 8 corantes no total
+  // número total = C(n+k-1, k) = C(23,8)
+  // A combinação pode ser vista como um número crescente de (k) "bolas" em (n) "baldes" separados por (n-1) divisores
+  // Podemos gerar as posições dos divisores entre (k+n-1) posições.
+
+  // Exemplo: se k=3 e n=2
+  // temos 3 bolas + 1 divisor (posições de 4)
+  // Um estado: bola, bola, divisor, bola => quantidade corante0=2, corante1=1
+
+  let result = Array(n).fill(0);
+
+  // Número total de posições = k + n - 1
+  const totalPositions = k + n - 1;
+
+  // Vamos achar as posições dos n-1 divisores entre totalPositions posições
+  // A quantidade de combinações = C(totalPositions, n-1)
+  // Para index, encontrar as posições dos divisores de forma crescente
+
+  let divPositions = [];
+
+  let remainingDivs = n - 1;
+  let pos = 0;
+  let x = index;
+
+  while (remainingDivs > 0) {
+    // para cada possível posição para divisor, calcular quantas combinações existem se colocarmos o divisor ali
+    let c = combination(totalPositions - pos - 1, remainingDivs - 1);
+    if (x < c) {
+      divPositions.push(pos);
+      remainingDivs--;
+      pos++;
+    } else {
+      x -= c;
+      pos++;
+    }
+  }
+
+  // Agora calculamos as quantidades entre os divisores
+  let prev = -1;
+  for (let i = 0; i < n; i++) {
+    let divPos = (i < divPositions.length) ? divPositions[i] : totalPositions;
+    result[i] = divPos - prev - 1;
+    prev = divPos;
+  }
+  return result;
+}
+
+// Função para calcular combinações C(n, r)
+const combCache = {};
+function combination(n, r) {
+  if (r > n) return 0;
+  if (r === 0 || r === n) return 1;
+  let key = n + ',' + r;
+  if (combCache[key]) return combCache[key];
+  let res = combination(n - 1, r - 1) + combination(n - 1, r);
+  combCache[key] = res;
+  return res;
+}
+
+// Função para converter vetor RGB [0..1] para hex
+function rgbToHex(rgb) {
+  function componentToHex(c) {
+    let hex = Math.round(c * 255).toString(16);
+    return hex.length == 1 ? "0" + hex : hex;
+  }
+  return "#" + componentToHex(rgb[0]) + componentToHex(rgb[1]) + componentToHex(rgb[2]);
+}
+
+// Função para calcular cor da armadura baseado nas quantidades dos corantes
+function calculateLeatherColor(qtds) {
+  // qtds: array[16] com quantidades dos corantes (soma = 8)
+
+  if (qtds.reduce((a,b) => a+b, 0) == 0) return [0.1, 0.1, 0.1]; // cor padrão se não tiver corante
+
+  let r = 0, g = 0, b = 0;
+  let total = 0;
+
+  for (let i = 0; i < dyeColors.length; i++) {
+    r += dyeColors[i][0] * qtds[i];
+    g += dyeColors[i][1] * qtds[i];
+    b += dyeColors[i][2] * qtds[i];
+    total += qtds[i];
+  }
+
+  r /= total;
+  g /= total;
+  b /= total;
+
+  // Aplica uma leve escurecida (fator 0.75)
+  r = r * 0.75;
+  g = g * 0.75;
+  b = b * 0.75;
+
+  return [r, g, b];
+}
+
+// Função para renderizar a página
+function renderPage(page) {
+  const grid = document.getElementById('grid');
+  grid.innerHTML = '';
+
+  const startIndex = page * colorsPerPage;
+  const endIndex = Math.min(startIndex + colorsPerPage, totalColors);
+
+  document.getElementById('pageInfo').textContent = `Página ${page + 1} de ${Math.ceil(totalColors / colorsPerPage)}`;
+
+  for (let i = startIndex; i < endIndex; i++) {
+    const qtds = indexToQuantities(i);
+    const rgb = calculateLeatherColor(qtds);
+    const hex = rgbToHex(rgb);
+
+    const box = document.createElement('div');
+    box.className = 'color-box';
+    box.style.backgroundColor = hex;
+    box.title = `Índice: ${i}\nCor: ${hex}`;
+
+    // Marcação com localStorage
+    let markedColors = JSON.parse(localStorage.getItem('markedColors') || '{}');
+    if (markedColors[i]) {
+      box.classList.add('marked');
     }
 
-    function renderNext() {
-      const container = document.getElementById("container");
-      for (let i = 0; i < step && index < data.length; i++, index++) {
-        const item = data[index];
-        const id = "combo" + item.id;
-        const div = document.createElement("div");
-        div.className = "color-box";
-        div.id = id;
-        div.innerHTML = `
-          <div class="swatch" style="background-color:${item.hex}"></div>
-          <div class="info">
-            <div class="dyes">${item.dyes}</div>
-            <div class="hex">${item.hex} | RGB(${item.rgb[0]}, ${item.rgb[1]}, ${item.rgb[2]})</div>
-          </div>
-          <div><label><input type="checkbox" onchange="toggleDone(this, '${id}')"> Já consegui</label></div>
-        `;
-        if (checked.includes(id)) {
-          div.classList.add("checked");
-          div.querySelector("input").checked = true;
-        }
-        container.appendChild(div);
+    box.onclick = () => {
+      let markedColors = JSON.parse(localStorage.getItem('markedColors') || '{}');
+      if (markedColors[i]) {
+        delete markedColors[i];
+        box.classList.remove('marked');
+      } else {
+        markedColors[i] = true;
+        box.classList.add('marked');
       }
-    }
-
-    function toggleDone(cb, id) {
-      const el = document.getElementById(id);
-      el.classList.toggle("checked", cb.checked);
-      const i = checked.indexOf(id);
-      if (cb.checked && i === -1) checked.push(id);
-      else if (!cb.checked && i !== -1) checked.splice(i, 1);
-      localStorage.setItem("checkedCombos", JSON.stringify(checked));
-      filterColors();
-    }
-
-    function loadProgress() {
-      checked = JSON.parse(localStorage.getItem("checkedCombos") || "[]");
-    }
-
-    function exportProgress() {
-      const data = localStorage.getItem("checkedCombos") || "[]";
-      const blob = new Blob([data], {type: "application/json"});
-      const a = document.createElement("a");
-      a.href = URL.createObjectURL(blob);
-      a.download = "progresso_armaduras.json";
-      a.click();
-    }
-
-    function importProgress(e) {
-      const file = e.target.files[0];
-      const reader = new FileReader();
-      reader.onload = function(event) {
-        localStorage.setItem("checkedCombos", event.target.result);
-        location.reload();
-      };
-      reader.readAsText(file);
-    }
-
-    function filterColors() {
-      const query = document.getElementById("search").value.toLowerCase();
-      const filter = document.getElementById("progressFilter").value;
-      document.querySelectorAll(".color-box").forEach(b => {
-        const text = b.innerText.toLowerCase();
-        const isChecked = b.classList.contains("checked");
-
-        const matchesText = text.includes(query);
-        const matchesProgress =
-          (filter === "all") ||
-          (filter === "done" && isChecked) ||
-          (filter === "not_done" && !isChecked);
-
-        b.style.display = (matchesText && matchesProgress) ? "flex" : "none";
-      });
-    }
-
-    window.onscroll = () => {
-      if (window.innerHeight + window.scrollY >= document.body.offsetHeight - 500) {
-        renderNext();
-      }
+      localStorage.setItem('markedColors', JSON.stringify(markedColors));
     };
 
-    loadData();
-  </script>
+    const tooltip = document.createElement('div');
+    tooltip.className = 'tooltip';
+    tooltip.textContent = i;
+
+    box.appendChild(tooltip);
+    grid.appendChild(box);
+  }
+}
+
+// Controle de paginação
+let currentPage = 0;
+
+document.getElementById('prevBtn').onclick = () => {
+  if (currentPage > 0) {
+    currentPage--;
+    renderPage(currentPage);
+  }
+};
+
+document.getElementById('nextBtn').onclick = () => {
+  if ((currentPage + 1) * colorsPerPage < totalColors) {
+    currentPage++;
+    renderPage(currentPage);
+  }
+};
+
+// Inicializa a página 0
+renderPage(currentPage);
+</script>
+
 </body>
 </html>
